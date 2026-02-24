@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { upload as vercelUpload } from "@vercel/blob/client";
 import type { Recording } from "@/lib/types";
 
 export function useUpload() {
@@ -19,31 +20,32 @@ export function useUpload() {
       setProgress(0);
 
       try {
-        const formData = new FormData();
-        formData.append("file", blob, `${recordingId}.webm`);
-        formData.append("recordingId", recordingId);
+        // Upload directly to Vercel Blob from the browser
+        const result = await vercelUpload(
+          `recordings/${recordingId}.webm`,
+          blob,
+          {
+            access: "public",
+            handleUploadUrl: "/api/upload",
+            onUploadProgress: (e) => {
+              setProgress(e.percentage);
+            },
+          }
+        );
 
-        const xhr = new XMLHttpRequest();
-
-        const recording = await new Promise<Recording>((resolve, reject) => {
-          xhr.upload.addEventListener("progress", (e) => {
-            if (e.lengthComputable) {
-              setProgress((e.loaded / e.total) * 100);
-            }
-          });
-
-          xhr.addEventListener("load", () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              resolve(JSON.parse(xhr.responseText));
-            } else {
-              reject(new Error("Upload failed"));
-            }
-          });
-
-          xhr.addEventListener("error", () => reject(new Error("Upload failed")));
-          xhr.open("POST", "/api/upload");
-          xhr.send(formData);
+        // The onUploadCompleted callback on the server updates the DB,
+        // but it may not have fired yet. Update manually as well.
+        const res = await fetch(`/api/recordings/${recordingId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            blobUrl: result.url,
+            fileSize: blob.size,
+            status: "ready",
+          }),
         });
+
+        const recording = await res.json();
 
         setUploading(false);
         setProgress(100);
