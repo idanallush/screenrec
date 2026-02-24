@@ -7,12 +7,12 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { name, color } = await request.json();
+  const { name, color, icon } = await request.json();
   if (!name || typeof name !== "string" || !name.trim()) {
     return NextResponse.json({ error: "Tag name is required" }, { status: 400 });
   }
   try {
-    const tag = await createTag(name.trim(), color || "#6d28d9");
+    const tag = await createTag(name.trim(), color || "#6d28d9", icon || "tag");
     return NextResponse.json(tag, { status: 201 });
   } catch (error) {
     // Unique constraint violation = tag already exists

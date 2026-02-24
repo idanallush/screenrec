@@ -33,7 +33,8 @@ export async function getDb() {
       CREATE TABLE IF NOT EXISTS tags (
         id    TEXT PRIMARY KEY,
         name  TEXT NOT NULL UNIQUE,
-        color TEXT NOT NULL DEFAULT '#6d28d9'
+        color TEXT NOT NULL DEFAULT '#6d28d9',
+        icon  TEXT NOT NULL DEFAULT 'tag'
       );
 
       CREATE TABLE IF NOT EXISTS recording_tags (
@@ -45,6 +46,14 @@ export async function getDb() {
       CREATE INDEX IF NOT EXISTS idx_recording_tags_recording ON recording_tags(recording_id);
       CREATE INDEX IF NOT EXISTS idx_recording_tags_tag ON recording_tags(tag_id);
     `);
+
+    // Migration: add icon column to tags if missing
+    try {
+      await client.execute("ALTER TABLE tags ADD COLUMN icon TEXT NOT NULL DEFAULT 'tag'");
+    } catch {
+      // Column already exists — ignore
+    }
+
     initialized = true;
   }
   return client;

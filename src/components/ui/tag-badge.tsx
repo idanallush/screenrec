@@ -1,6 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
+import { TagIcon } from "@/components/ui/tag-icon";
 import { cn } from "@/lib/utils";
 import type { Tag } from "@/lib/types";
 
@@ -32,13 +33,24 @@ export function TagBadge({
       style={active ? { backgroundColor: tag.color } : undefined}
       onClick={onClick}
     >
-      <span
-        className={cn(
-          "rounded-full shrink-0",
-          size === "sm" ? "w-2 h-2" : "w-2.5 h-2.5"
-        )}
-        style={{ backgroundColor: active ? "white" : tag.color }}
-      />
+      {tag.icon && tag.icon !== "tag" ? (
+        <TagIcon
+          icon={tag.icon}
+          className={cn(
+            "shrink-0",
+            size === "sm" ? "w-3 h-3" : "w-3.5 h-3.5"
+          )}
+          style={{ color: active ? "white" : tag.color }}
+        />
+      ) : (
+        <span
+          className={cn(
+            "rounded-full shrink-0",
+            size === "sm" ? "w-2 h-2" : "w-2.5 h-2.5"
+          )}
+          style={{ backgroundColor: active ? "white" : tag.color }}
+        />
+      )}
       <span className="truncate max-w-[80px]">{tag.name}</span>
       {onRemove && (
         <button

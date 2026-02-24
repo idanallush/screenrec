@@ -26,6 +26,7 @@ function rowToTag(row: TagRow): Tag {
     id: row.id as string,
     name: row.name as string,
     color: row.color as string,
+    icon: (row.icon as string) || "tag",
   };
 }
 
@@ -227,14 +228,52 @@ export async function getTagsForRecordings(
   return map;
 }
 
-export async function createTag(name: string, color: string): Promise<Tag> {
+export async function createTag(name: string, color: string, icon: string = "tag"): Promise<Tag> {
   const db = await getDb();
   const id = generateId();
   await db.execute({
-    sql: "INSERT INTO tags (id, name, color) VALUES (?, ?, ?)",
-    args: [id, name, color],
+    sql: "INSERT INTO tags (id, name, color, icon) VALUES (?, ?, ?, ?)",
+    args: [id, name, color, icon],
   });
-  return { id, name, color };
+  return { id, name, color, icon };
+}
+
+export async function updateTag(
+  id: string,
+  updates: { name?: string; color?: string; icon?: string }
+): Promise<Tag | null> {
+  const db = await getDb();
+  const sets: string[] = [];
+  const args: (string | number)[] = [];
+
+  if (updates.name !== undefined) {
+    sets.push("name = ?");
+    args.push(updates.name);
+  }
+  if (updates.color !== undefined) {
+    sets.push("color = ?");
+    args.push(updates.color);
+  }
+  if (updates.icon !== undefined) {
+    sets.push("icon = ?");
+    args.push(updates.icon);
+  }
+
+  if (sets.length === 0) return null;
+
+  args.push(id);
+  await db.execute({
+    sql: `UPDATE tags SET ${sets.join(", ")} WHERE id = ?`,
+    args,
+  });
+
+  const result = await db.execute({
+    sql: "SELECT * FROM tags WHERE id = ?",
+    args: [id],
+  });
+
+  if (result.rows.length === 0) return null;
+  return rowToTag(result.rows[0] as unknown as TagRow);
 }
 
 export async function deleteTag(id: string): Promise<boolean> {

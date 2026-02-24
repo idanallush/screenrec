@@ -3,10 +3,10 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
-import { LayoutDashboard, Circle, Tag as TagIcon, X } from "lucide-react";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { LayoutDashboard, Circle, Tag as LucideTag, Settings2 } from "lucide-react";
+import { TagIcon } from "@/components/ui/tag-icon";
+import { ManageTagsDialog } from "@/components/dashboard/manage-tags-dialog";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import type { TagWithCount } from "@/lib/types";
 
 const navItems = [
@@ -20,8 +20,7 @@ export function Sidebar() {
   const router = useRouter();
   const activeTag = searchParams.get("tag") || undefined;
   const [tags, setTags] = useState<TagWithCount[]>([]);
-  const [deleteTarget, setDeleteTarget] = useState<TagWithCount | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [showManage, setShowManage] = useState(false);
 
   useEffect(() => {
     fetch("/api/tags")
@@ -30,22 +29,13 @@ export function Sidebar() {
       .catch(() => {});
   }, [pathname, activeTag]);
 
-  async function handleDeleteTag() {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    const res = await fetch(`/api/tags/${deleteTarget.id}`, { method: "DELETE" });
-    if (res.ok) {
-      setTags((prev) => prev.filter((t) => t.id !== deleteTarget.id));
-      toast.success(`Tag "${deleteTarget.name}" deleted`);
-      if (activeTag === deleteTarget.name) {
-        router.push("/dashboard");
-      }
-      router.refresh();
-    } else {
-      toast.error("Failed to delete tag");
+  function handleTagsChange(newTags: TagWithCount[]) {
+    setTags(newTags);
+    // If the active tag was deleted/renamed, redirect to dashboard
+    if (activeTag && !newTags.find((t) => t.name === activeTag)) {
+      router.push("/dashboard");
     }
-    setDeleting(false);
-    setDeleteTarget(null);
+    router.refresh();
   }
 
   return (
@@ -75,65 +65,64 @@ export function Sidebar() {
       })}
 
       {/* Tags section */}
-      {tags.length > 0 && (
-        <>
-          <div className="border-t border-border my-2" />
-          <div className="px-3 py-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wider flex items-center gap-1.5">
-              <TagIcon className="w-3 h-3" />
-              Tags
-            </span>
-          </div>
-          {tags.map((tag) => {
-            const isActive = activeTag === tag.name;
-            return (
-              <div key={tag.id} className="group/tag flex items-center">
-                <Link
-                  href={
-                    isActive
-                      ? "/dashboard"
-                      : `/dashboard?tag=${encodeURIComponent(tag.name)}`
-                  }
-                  className={cn(
-                    "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm transition-colors flex-1 min-w-0",
-                    isActive
-                      ? "bg-primary/10 text-primary font-medium"
-                      : "text-muted hover:text-foreground hover:bg-surface-hover"
-                  )}
-                >
-                  <span
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{ backgroundColor: tag.color }}
-                  />
-                  <span className="truncate flex-1">{tag.name}</span>
-                  <span className="text-xs opacity-60">{tag.count}</span>
-                </Link>
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setDeleteTarget(tag);
-                  }}
-                  className="opacity-0 group-hover/tag:opacity-100 p-1 mr-1 rounded hover:bg-red-500/10 hover:text-red-500 text-muted transition-all duration-150 shrink-0"
-                  title={`Delete tag "${tag.name}"`}
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            );
-          })}
-        </>
+      <div className="border-t border-border my-2" />
+      <div className="px-3 py-1 flex items-center justify-between">
+        <span className="text-xs font-medium text-muted uppercase tracking-wider flex items-center gap-1.5">
+          <LucideTag className="w-3 h-3" />
+          Tags
+        </span>
+        <button
+          onClick={() => setShowManage(true)}
+          className="p-0.5 rounded hover:bg-surface-hover text-muted hover:text-foreground transition-colors"
+          title="Manage tags"
+        >
+          <Settings2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {tags.length === 0 ? (
+        <button
+          onClick={() => setShowManage(true)}
+          className="mx-3 px-3 py-2 text-xs text-muted hover:text-foreground border border-dashed border-border hover:border-primary/30 rounded-lg transition-colors text-center"
+        >
+          + Create a tag
+        </button>
+      ) : (
+        tags.map((tag) => {
+          const isActive = activeTag === tag.name;
+          return (
+            <Link
+              key={tag.id}
+              href={
+                isActive
+                  ? "/dashboard"
+                  : `/dashboard?tag=${encodeURIComponent(tag.name)}`
+              }
+              className={cn(
+                "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm transition-colors",
+                isActive
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted hover:text-foreground hover:bg-surface-hover"
+              )}
+            >
+              <TagIcon
+                icon={tag.icon}
+                className="w-4 h-4 shrink-0"
+                style={{ color: tag.color }}
+              />
+              <span className="truncate flex-1">{tag.name}</span>
+              <span className="text-xs opacity-60">{tag.count}</span>
+            </Link>
+          );
+        })
       )}
 
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onConfirm={handleDeleteTag}
-        onCancel={() => setDeleteTarget(null)}
-        title="Delete Tag"
-        description={`Are you sure you want to delete the tag "${deleteTarget?.name}"? It will be removed from all recordings.`}
-        confirmLabel="Delete"
-        confirmVariant="danger"
-        loading={deleting}
+      {/* Manage Tags Dialog */}
+      <ManageTagsDialog
+        open={showManage}
+        onClose={() => setShowManage(false)}
+        tags={tags}
+        onTagsChange={handleTagsChange}
       />
     </aside>
   );

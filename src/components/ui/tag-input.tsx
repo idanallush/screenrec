@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Plus } from "lucide-react";
 import { TagBadge } from "./tag-badge";
+import { TagIcon } from "./tag-icon";
 import { TAG_COLORS } from "@/lib/constants";
 import type { Tag } from "@/lib/types";
 
@@ -114,9 +115,10 @@ export function TagInput({
               className="w-full px-3 py-1.5 text-left text-sm hover:bg-surface-hover flex items-center gap-2 cursor-pointer transition-colors duration-150"
               onClick={() => handleSelect(tag.id)}
             >
-              <span
-                className="w-2.5 h-2.5 rounded-full shrink-0"
-                style={{ backgroundColor: tag.color }}
+              <TagIcon
+                icon={tag.icon}
+                className="w-3.5 h-3.5 shrink-0"
+                style={{ color: tag.color }}
               />
               {tag.name}
             </button>

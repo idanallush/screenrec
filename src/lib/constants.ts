@@ -26,3 +26,30 @@ export const TAG_COLORS = [
   "#db2777", // pink
   "#7c3aed", // violet
 ] as const;
+
+export const TAG_ICONS = [
+  "tag",
+  "star",
+  "heart",
+  "bookmark",
+  "flag",
+  "zap",
+  "flame",
+  "trophy",
+  "gem",
+  "crown",
+  "music",
+  "camera",
+  "film",
+  "gamepad-2",
+  "briefcase",
+  "graduation-cap",
+  "code",
+  "bug",
+  "rocket",
+  "lightbulb",
+  "megaphone",
+  "users",
+  "globe",
+  "shield",
+] as const;
