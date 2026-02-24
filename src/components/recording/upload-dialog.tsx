@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { useUpload } from "@/hooks/use-chunked-upload";
@@ -24,6 +24,7 @@ export function UploadDialog({
   const [title, setTitle] = useState("");
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const { upload, progress, uploading } = useUpload();
+  const previewUrl = useMemo(() => URL.createObjectURL(blob), [blob]);
 
   async function handleUpload() {
     // Step 1: Create recording metadata
@@ -80,7 +81,7 @@ export function UploadDialog({
       {/* Preview */}
       <div className="rounded-lg overflow-hidden bg-black aspect-video">
         <video
-          src={URL.createObjectURL(blob)}
+          src={previewUrl}
           controls
           className="w-full h-full"
         />
