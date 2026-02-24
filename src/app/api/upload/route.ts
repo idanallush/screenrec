@@ -16,6 +16,7 @@ export async function POST(request: Request): Promise<NextResponse> {
           maximumSizeInBytes: 500 * 1024 * 1024, // 500MB
           addRandomSuffix: false,
           tokenPayload: clientPayload || "",
+          validUntil: Date.now() + 60 * 60 * 1000, // 1 hour (default 30s is too short for large videos)
         };
       },
       onUploadCompleted: async ({ blob, tokenPayload }) => {

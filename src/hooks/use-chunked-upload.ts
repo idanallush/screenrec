@@ -29,6 +29,7 @@ export function useUpload() {
           {
             access: "public",
             handleUploadUrl: "/api/upload",
+            multipart: true,
             clientPayload: JSON.stringify({ recordingId }),
             onUploadProgress: (e) => {
               setProgress(e.percentage);
