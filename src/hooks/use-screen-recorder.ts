@@ -240,6 +240,9 @@ export function useScreenRecorder() {
 
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: detectedMime });
+      // Free chunk memory immediately — the blob owns the data now
+      chunksRef.current = [];
+      console.log("[Recording] Blob created:", (blob.size / (1024 * 1024)).toFixed(1), "MB");
       setRecordedBlob(blob);
       stopTimer();
       setState("STOPPED");

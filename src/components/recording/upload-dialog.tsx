@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { useUpload } from "@/hooks/use-chunked-upload";
-import { Upload, Link, Check, X } from "lucide-react";
+import { Upload, Link, Check, X, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { generateThumbnail } from "@/lib/thumbnail";
 import type { Recording } from "@/lib/types";
@@ -16,6 +16,11 @@ interface UploadDialogProps {
   onDiscard: () => void;
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function UploadDialog({
   blob,
   duration,
@@ -25,51 +30,98 @@ export function UploadDialog({
   const [title, setTitle] = useState("");
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [thumbnail, setThumbnail] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<string>("");
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const { upload, progress, uploading } = useUpload();
-  const previewUrl = useMemo(() => URL.createObjectURL(blob), [blob]);
+  const previewUrlRef = useRef<string | null>(null);
 
-  // Generate thumbnail as soon as the blob is available
+  // Create ObjectURL only once, clean up on unmount
+  const previewUrl = useMemo(() => {
+    const url = URL.createObjectURL(blob);
+    previewUrlRef.current = url;
+    return url;
+  }, [blob]);
+
   useEffect(() => {
-    generateThumbnail(blob, { width: 640, height: 360, quality: 0.7, seekTime: 1 })
-      .then(setThumbnail)
+    return () => {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+      }
+    };
+  }, []);
+
+  // Generate thumbnail in background — non-blocking, optional
+  useEffect(() => {
+    let cancelled = false;
+    console.log("[Thumbnail] Starting generation, blob size:", formatFileSize(blob.size));
+
+    generateThumbnail(blob, { width: 320, quality: 0.6, seekTime: 1 })
+      .then((dataUrl) => {
+        if (!cancelled) {
+          setThumbnail(dataUrl);
+          console.log("[Thumbnail] Generated successfully");
+        }
+      })
       .catch((err) => {
-        console.warn("[Thumbnail] Failed to generate:", err);
+        console.warn("[Thumbnail] Failed (non-critical):", err.message);
+        // Thumbnail is optional — upload works fine without it
       });
+
+    return () => { cancelled = true; };
   }, [blob]);
 
   async function handleUpload() {
-    // Step 1: Create recording metadata (include thumbnail)
-    const res = await fetch("/api/recordings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: title || "Untitled Recording",
-        duration,
-        thumbnail,
-      }),
-    });
+    setUploadError(null);
 
-    if (!res.ok) {
-      toast.error("Failed to create recording");
-      return;
+    try {
+      // Step 1: Create recording metadata
+      setUploadStatus("Creating recording...");
+      console.log("[Upload] Creating recording metadata, size:", formatFileSize(blob.size));
+
+      const res = await fetch("/api/recordings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title || "Untitled Recording",
+          duration,
+          thumbnail, // may be null if still generating — that's fine
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "Unknown error");
+        throw new Error(`Failed to create recording: ${errText}`);
+      }
+
+      const recording = await res.json();
+      console.log("[Upload] Recording created:", recording.id);
+
+      // Step 2: Upload the video file
+      setUploadStatus("Uploading video...");
+
+      await upload({
+        blob,
+        recordingId: recording.id,
+        onComplete: (updated) => {
+          setUploadStatus("");
+          const url = `${window.location.origin}/watch/${updated.id}`;
+          setShareUrl(url);
+          toast.success("Recording uploaded!");
+          onComplete(updated);
+        },
+        onError: (err) => {
+          setUploadError(err);
+          setUploadStatus("");
+          toast.error(`Upload failed: ${err}`);
+        },
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[Upload] Error:", msg);
+      setUploadError(msg);
+      setUploadStatus("");
+      toast.error(msg);
     }
-
-    const recording = await res.json();
-
-    // Step 2: Upload the video
-    await upload({
-      blob,
-      recordingId: recording.id,
-      onComplete: (updated) => {
-        const url = `${window.location.origin}/watch/${updated.id}`;
-        setShareUrl(url);
-        toast.success("Recording uploaded!");
-        onComplete(updated);
-      },
-      onError: (err) => {
-        toast.error(`Upload failed: ${err}`);
-      },
-    });
   }
 
   async function copyLink() {
@@ -90,14 +142,21 @@ export function UploadDialog({
         )}
       </div>
 
-      {/* Preview */}
+      {/* Preview — preload="metadata" avoids loading entire video into memory */}
       <div className="rounded-lg overflow-hidden bg-black aspect-video">
         <video
           src={previewUrl}
           controls
+          preload="metadata"
           className="w-full h-full"
         />
       </div>
+
+      {/* File info */}
+      <p className="text-xs text-muted text-center">
+        {formatFileSize(blob.size)} &middot;{" "}
+        {Math.floor(duration / 60)}:{String(Math.floor(duration % 60)).padStart(2, "0")}
+      </p>
 
       {!shareUrl ? (
         <>
@@ -114,8 +173,15 @@ export function UploadDialog({
             <div className="space-y-2">
               <ProgressBar value={progress} />
               <p className="text-sm text-muted text-center">
-                Uploading... {Math.round(progress)}%
+                {uploadStatus || `Uploading... ${Math.round(progress)}%`}
               </p>
+            </div>
+          )}
+
+          {uploadError && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-950 rounded-lg text-sm text-red-700 dark:text-red-400">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{uploadError}</span>
             </div>
           )}
 
@@ -125,8 +191,18 @@ export function UploadDialog({
             className="w-full gap-2"
           >
             <Upload className="w-4 h-4" />
-            {uploading ? "Uploading..." : "Save & Share"}
+            {uploading ? uploadStatus || "Uploading..." : "Save & Share"}
           </Button>
+
+          {uploadError && !uploading && (
+            <Button
+              onClick={handleUpload}
+              variant="outline"
+              className="w-full gap-2"
+            >
+              Retry Upload
+            </Button>
+          )}
         </>
       ) : (
         <div className="space-y-3">

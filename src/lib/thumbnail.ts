@@ -1,16 +1,15 @@
 /**
  * Generates a thumbnail image from a video Blob.
- * Seeks to 1 second (or 0 if shorter), captures a frame,
- * and returns a JPEG data URL.
+ * Uses preload="metadata" to minimize memory usage.
+ * Captures from first seekable frame.
  */
 export function generateThumbnail(
   videoBlob: Blob,
-  options: { width?: number; height?: number; quality?: number; seekTime?: number } = {}
+  options: { width?: number; quality?: number; seekTime?: number } = {}
 ): Promise<string> {
   const {
     width = 320,
-    height = 180,
-    quality = 0.7,
+    quality = 0.6,
     seekTime = 1,
   } = options;
 
@@ -20,14 +19,17 @@ export function generateThumbnail(
     video.src = url;
     video.muted = true;
     video.playsInline = true;
-    video.preload = "auto";
+    // Only load metadata — don't buffer the entire file
+    video.preload = "metadata";
 
     let resolved = false;
 
     function cleanup() {
-      URL.revokeObjectURL(url);
+      video.pause();
       video.removeAttribute("src");
       video.load();
+      // Delay revoking URL slightly to let browser release refs
+      setTimeout(() => URL.revokeObjectURL(url), 200);
     }
 
     function captureFrame() {
@@ -36,9 +38,8 @@ export function generateThumbnail(
 
       try {
         const canvas = document.createElement("canvas");
-        // Maintain aspect ratio
-        const vw = video.videoWidth || width;
-        const vh = video.videoHeight || height;
+        const vw = video.videoWidth || 1920;
+        const vh = video.videoHeight || 1080;
         const aspect = vw / vh;
         canvas.width = width;
         canvas.height = Math.round(width / aspect);
@@ -62,8 +63,8 @@ export function generateThumbnail(
 
     video.addEventListener("seeked", captureFrame, { once: true });
 
-    video.addEventListener("loadeddata", () => {
-      // Seek to the desired time (or 0 if video is too short)
+    video.addEventListener("loadedmetadata", () => {
+      // Seek to desired time (or 0 if shorter)
       const time = video.duration > seekTime ? seekTime : 0;
       video.currentTime = time;
     }, { once: true });
@@ -76,13 +77,13 @@ export function generateThumbnail(
       }
     }, { once: true });
 
-    // Timeout fallback
+    // Generous timeout for large files
     setTimeout(() => {
       if (!resolved) {
         resolved = true;
         cleanup();
         reject(new Error("Thumbnail generation timed out"));
       }
-    }, 10000);
+    }, 30000);
   });
 }
