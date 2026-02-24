@@ -29,6 +29,21 @@ export async function getDb() {
 
       CREATE INDEX IF NOT EXISTS idx_recordings_created_at ON recordings(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_recordings_status ON recordings(status);
+
+      CREATE TABLE IF NOT EXISTS tags (
+        id    TEXT PRIMARY KEY,
+        name  TEXT NOT NULL UNIQUE,
+        color TEXT NOT NULL DEFAULT '#6d28d9'
+      );
+
+      CREATE TABLE IF NOT EXISTS recording_tags (
+        recording_id TEXT NOT NULL,
+        tag_id       TEXT NOT NULL,
+        PRIMARY KEY (recording_id, tag_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_recording_tags_recording ON recording_tags(recording_id);
+      CREATE INDEX IF NOT EXISTS idx_recording_tags_tag ON recording_tags(tag_id);
     `);
     initialized = true;
   }

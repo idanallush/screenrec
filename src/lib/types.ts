@@ -48,6 +48,22 @@ export type WebcamPosition =
   | "top-left"
   | "top-right";
 
+export interface Tag {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export interface TagRow {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export interface TagWithCount extends Tag {
+  count: number;
+}
+
 export interface RecordingSettings {
   includeWebcam: boolean;
   webcamDeviceId: string | null;

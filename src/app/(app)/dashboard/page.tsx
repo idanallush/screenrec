@@ -1,32 +1,30 @@
-import Link from "next/link";
-import { getAllRecordings } from "@/lib/db-queries";
+import { getAllRecordings, getAllTagsWithCounts, getTagsForRecordings } from "@/lib/db-queries";
 import { RecordingGrid } from "@/components/dashboard/recording-grid";
-import { EmptyState } from "@/components/dashboard/empty-state";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
-  const recordings = await getAllRecordings();
+interface Props {
+  searchParams: Promise<{ tag?: string }>;
+}
+
+export default async function DashboardPage({ searchParams }: Props) {
+  const { tag } = await searchParams;
+  const recordings = await getAllRecordings(tag);
+  const allTagsWithCounts = await getAllTagsWithCounts();
+  const allTags = allTagsWithCounts.map(({ count: _count, ...t }) => t);
+  const recordingTags = await getTagsForRecordings(
+    recordings.map((r) => r.id)
+  );
 
   return (
     <main className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">My Recordings</h1>
-        <Link href="/record">
-          <Button className="gap-2">
-            <Plus className="w-4 h-4" />
-            New Recording
-          </Button>
-        </Link>
-      </div>
-
-      {recordings.length === 0 ? (
-        <EmptyState />
-      ) : (
-        <RecordingGrid recordings={recordings} />
-      )}
+      <RecordingGrid
+        recordings={recordings}
+        allTags={allTags}
+        allTagsWithCounts={allTagsWithCounts}
+        recordingTags={recordingTags}
+        activeTag={tag}
+      />
     </main>
   );
 }
