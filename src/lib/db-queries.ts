@@ -67,13 +67,14 @@ export async function createRecording(data: {
   width?: number;
   height?: number;
   mimeType?: string;
+  thumbnail?: string;
 }): Promise<Recording> {
   const db = await getDb();
   const id = generateId();
 
   await db.execute({
-    sql: `INSERT INTO recordings (id, title, duration, has_webcam, width, height, mime_type)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO recordings (id, title, duration, has_webcam, width, height, mime_type, thumbnail)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       data.title || "Untitled Recording",
@@ -82,6 +83,7 @@ export async function createRecording(data: {
       data.width || null,
       data.height || null,
       data.mimeType || "video/webm",
+      data.thumbnail || null,
     ],
   });
 

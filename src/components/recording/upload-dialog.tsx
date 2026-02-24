@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { useUpload } from "@/hooks/use-chunked-upload";
 import { Upload, Link, Check, X } from "lucide-react";
 import { toast } from "sonner";
+import { generateThumbnail } from "@/lib/thumbnail";
 import type { Recording } from "@/lib/types";
 
 interface UploadDialogProps {
@@ -23,17 +24,28 @@ export function UploadDialog({
 }: UploadDialogProps) {
   const [title, setTitle] = useState("");
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [thumbnail, setThumbnail] = useState<string | null>(null);
   const { upload, progress, uploading } = useUpload();
   const previewUrl = useMemo(() => URL.createObjectURL(blob), [blob]);
 
+  // Generate thumbnail as soon as the blob is available
+  useEffect(() => {
+    generateThumbnail(blob, { width: 640, height: 360, quality: 0.7, seekTime: 1 })
+      .then(setThumbnail)
+      .catch((err) => {
+        console.warn("[Thumbnail] Failed to generate:", err);
+      });
+  }, [blob]);
+
   async function handleUpload() {
-    // Step 1: Create recording metadata
+    // Step 1: Create recording metadata (include thumbnail)
     const res = await fetch("/api/recordings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: title || "Untitled Recording",
         duration,
+        thumbnail,
       }),
     });
 

@@ -99,8 +99,15 @@ export function RecordingCard({
       >
         {/* Thumbnail / Preview */}
         {selectionMode ? (
-          <div className="relative aspect-video bg-gray-900 flex items-center justify-center cursor-pointer">
-            <Play className="w-12 h-12 text-white/60 transition-all duration-200" />
+          <div className="relative aspect-video bg-gray-900 flex items-center justify-center cursor-pointer overflow-hidden">
+            {recording.thumbnail ? (
+              <img
+                src={recording.thumbnail}
+                alt={recording.title}
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+            ) : null}
+            <Play className="relative w-12 h-12 text-white/60 transition-all duration-200 drop-shadow-lg" />
             {/* Selection checkbox */}
             <div
               className={cn(
@@ -118,8 +125,15 @@ export function RecordingCard({
           </div>
         ) : (
           <Link href={`/watch/${recording.id}`}>
-            <div className="relative aspect-video bg-gray-900 flex items-center justify-center cursor-pointer">
-              <Play className="w-12 h-12 text-white/60 group-hover:text-white/90 group-hover:scale-110 transition-all duration-200" />
+            <div className="relative aspect-video bg-gray-900 flex items-center justify-center cursor-pointer overflow-hidden">
+              {recording.thumbnail ? (
+                <img
+                  src={recording.thumbnail}
+                  alt={recording.title}
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+              ) : null}
+              <Play className="relative w-12 h-12 text-white/60 group-hover:text-white/90 group-hover:scale-110 transition-all duration-200 drop-shadow-lg" />
               <span className="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/70 text-white text-xs rounded font-mono">
                 {formatDuration(recording.duration)}
               </span>

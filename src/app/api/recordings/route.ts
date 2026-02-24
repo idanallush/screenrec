@@ -15,6 +15,7 @@ export async function POST(request: NextRequest) {
     width: body.width,
     height: body.height,
     mimeType: body.mimeType,
+    thumbnail: body.thumbnail,
   });
   return NextResponse.json(recording, { status: 201 });
 }
