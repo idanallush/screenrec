@@ -88,7 +88,12 @@ export function VideoPlayer({ src }: VideoPlayerProps) {
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
     const onTimeUpdate = () => setCurrentTime(video.currentTime);
-    const onLoadedMetadata = () => setDuration(video.duration);
+    const onLoadedMetadata = () => {
+      if (Number.isFinite(video.duration)) setDuration(video.duration);
+    };
+    const onDurationChange = () => {
+      if (Number.isFinite(video.duration)) setDuration(video.duration);
+    };
     const onFullscreenChange = () =>
       setIsFullscreen(!!document.fullscreenElement);
 
@@ -96,6 +101,7 @@ export function VideoPlayer({ src }: VideoPlayerProps) {
     video.addEventListener("pause", onPause);
     video.addEventListener("timeupdate", onTimeUpdate);
     video.addEventListener("loadedmetadata", onLoadedMetadata);
+    video.addEventListener("durationchange", onDurationChange);
     document.addEventListener("fullscreenchange", onFullscreenChange);
 
     return () => {
@@ -103,6 +109,7 @@ export function VideoPlayer({ src }: VideoPlayerProps) {
       video.removeEventListener("pause", onPause);
       video.removeEventListener("timeupdate", onTimeUpdate);
       video.removeEventListener("loadedmetadata", onLoadedMetadata);
+      video.removeEventListener("durationchange", onDurationChange);
       document.removeEventListener("fullscreenchange", onFullscreenChange);
     };
   }, []);
@@ -143,7 +150,9 @@ export function VideoPlayer({ src }: VideoPlayerProps) {
     }
   }, [playing]);
 
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  // WebM from MediaRecorder often has Infinity/NaN duration
+  const validDuration = Number.isFinite(duration) ? duration : 0;
+  const progress = validDuration > 0 ? (currentTime / validDuration) * 100 : 0;
 
   return (
     <div
@@ -182,7 +191,7 @@ export function VideoPlayer({ src }: VideoPlayerProps) {
         <input
           type="range"
           min={0}
-          max={duration || 0}
+          max={validDuration || 0}
           step={0.1}
           value={currentTime}
           onChange={handleSeek}
@@ -227,7 +236,7 @@ export function VideoPlayer({ src }: VideoPlayerProps) {
             />
 
             <span className="text-white text-xs font-mono tabular-nums">
-              {formatDuration(currentTime)} / {formatDuration(duration)}
+              {formatDuration(currentTime)}{validDuration > 0 ? ` / ${formatDuration(validDuration)}` : ""}
             </span>
           </div>
 

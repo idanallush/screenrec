@@ -31,10 +31,12 @@ export async function GET(
   }
 
   // Build response headers
+  // Use "private" so Vercel CDN doesn't cache and convert 206→200
+  // Browser still caches locally for fast seeking
   const headers = new Headers({
     "Content-Type": recording.mimeType || "video/webm",
     "Accept-Ranges": "bytes",
-    "Cache-Control": "public, max-age=3600",
+    "Cache-Control": "private, max-age=3600",
   });
 
   // Forward content-length and content-range for range requests
