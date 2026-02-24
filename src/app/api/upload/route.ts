@@ -10,6 +10,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       body,
       request,
       onBeforeGenerateToken: async (_pathname, clientPayload) => {
+        console.log("[Upload API] Generating token, clientPayload:", clientPayload);
         return {
           allowedContentTypes: ["video/webm", "video/mp4", "video/x-matroska"],
           maximumSizeInBytes: 500 * 1024 * 1024, // 500MB
@@ -18,6 +19,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         };
       },
       onUploadCompleted: async ({ blob, tokenPayload }) => {
+        console.log("[Upload API] Upload completed, blob:", blob.url);
         try {
           const { recordingId } = JSON.parse(tokenPayload || "{}");
           if (recordingId) {
@@ -25,9 +27,10 @@ export async function POST(request: Request): Promise<NextResponse> {
               blobUrl: blob.url,
               status: "ready",
             });
+            console.log("[Upload API] Recording updated:", recordingId);
           }
         } catch (error) {
-          console.error("onUploadCompleted error:", error);
+          console.error("[Upload API] onUploadCompleted error:", error);
           throw new Error("Could not update recording");
         }
       },
@@ -35,6 +38,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     return NextResponse.json(jsonResponse);
   } catch (error) {
+    console.error("[Upload API] handleUpload error:", error);
     return NextResponse.json(
       { error: (error as Error).message },
       { status: 400 }
