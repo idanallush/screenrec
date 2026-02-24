@@ -1,4 +1,5 @@
 import { getRecordingById, incrementViewCount } from "@/lib/db-queries";
+import { getDownloadUrl } from "@vercel/blob";
 import { VideoPlayer } from "@/components/viewer/video-player";
 import { VideoInfo } from "@/components/viewer/video-info";
 import { ShareButton } from "@/components/viewer/share-button";
@@ -22,6 +23,11 @@ export default async function WatchPage({ params }: Props) {
 
   await incrementViewCount(id);
 
+  // Get a signed download URL for private blob
+  const videoUrl = recording.blobUrl
+    ? await getDownloadUrl(recording.blobUrl)
+    : "";
+
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       {/* Header */}
@@ -34,7 +40,7 @@ export default async function WatchPage({ params }: Props) {
 
       {/* Player */}
       <main className="max-w-5xl mx-auto p-4 md:p-8">
-        <VideoPlayer src={recording.blobUrl} />
+        <VideoPlayer src={videoUrl} />
         <VideoInfo recording={recording} />
         <ShareButton recordingId={recording.id} />
       </main>

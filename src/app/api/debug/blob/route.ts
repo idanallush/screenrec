@@ -26,7 +26,7 @@ export async function GET() {
   // Check 2: Try server-side upload
   try {
     const testBlob = await put("_debug_test.txt", "test", {
-      access: "public",
+      access: "private",
       contentType: "text/plain",
       addRandomSuffix: false,
     });

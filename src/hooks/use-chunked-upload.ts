@@ -27,7 +27,7 @@ export function useUpload() {
           `recordings/${recordingId}.webm`,
           blob,
           {
-            access: "public",
+            access: "private",
             handleUploadUrl: "/api/upload",
             multipart: true,
             clientPayload: JSON.stringify({ recordingId }),
