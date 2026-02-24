@@ -1,5 +1,4 @@
 import { getRecordingById, incrementViewCount } from "@/lib/db-queries";
-import { getDownloadUrl } from "@vercel/blob";
 import { VideoPlayer } from "@/components/viewer/video-player";
 import { VideoInfo } from "@/components/viewer/video-info";
 import { ShareButton } from "@/components/viewer/share-button";
@@ -23,10 +22,8 @@ export default async function WatchPage({ params }: Props) {
 
   await incrementViewCount(id);
 
-  // Get a signed download URL for private blob
-  const videoUrl = recording.blobUrl
-    ? await getDownloadUrl(recording.blobUrl)
-    : "";
+  // Use proxy endpoint for private blob streaming
+  const videoUrl = `/api/recordings/${id}/video`;
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
