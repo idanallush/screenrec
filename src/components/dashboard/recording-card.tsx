@@ -196,7 +196,7 @@ export function RecordingCard({
           )}
 
           <div className="flex items-center gap-3 text-xs text-muted">
-            <span>{formatRelativeDate(recording.createdAt)}</span>
+            <span suppressHydrationWarning>{formatRelativeDate(recording.createdAt)}</span>
             <span className="flex items-center gap-1">
               <Eye className="w-3 h-3" />
               {recording.viewCount}

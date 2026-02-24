@@ -6,11 +6,11 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { useUpload } from "@/hooks/use-chunked-upload";
 import { Upload, Link, Check, X, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { generateThumbnail } from "@/lib/thumbnail";
 import type { Recording } from "@/lib/types";
 
 interface UploadDialogProps {
   blob: Blob;
+  thumbnail: string | null;
   duration: number;
   onComplete: (recording: Recording) => void;
   onDiscard: () => void;
@@ -23,13 +23,13 @@ function formatFileSize(bytes: number): string {
 
 export function UploadDialog({
   blob,
+  thumbnail,
   duration,
   onComplete,
   onDiscard,
 }: UploadDialogProps) {
   const [title, setTitle] = useState("");
   const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [thumbnail, setThumbnail] = useState<string | null>(null);
   const [uploadStatus, setUploadStatus] = useState<string>("");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const { upload, progress, uploading } = useUpload();
@@ -50,33 +50,13 @@ export function UploadDialog({
     };
   }, []);
 
-  // Generate thumbnail in background — non-blocking, optional
-  useEffect(() => {
-    let cancelled = false;
-    console.log("[Thumbnail] Starting generation, blob size:", formatFileSize(blob.size));
-
-    generateThumbnail(blob, { width: 320, quality: 0.6, seekTime: 1 })
-      .then((dataUrl) => {
-        if (!cancelled) {
-          setThumbnail(dataUrl);
-          console.log("[Thumbnail] Generated successfully");
-        }
-      })
-      .catch((err) => {
-        console.warn("[Thumbnail] Failed (non-critical):", err.message);
-        // Thumbnail is optional — upload works fine without it
-      });
-
-    return () => { cancelled = true; };
-  }, [blob]);
-
   async function handleUpload() {
     setUploadError(null);
 
     try {
       // Step 1: Create recording metadata
       setUploadStatus("Creating recording...");
-      console.log("[Upload] Creating recording metadata, size:", formatFileSize(blob.size));
+      console.log("[Upload] Creating recording, size:", formatFileSize(blob.size));
 
       const res = await fetch("/api/recordings", {
         method: "POST",
@@ -84,7 +64,7 @@ export function UploadDialog({
         body: JSON.stringify({
           title: title || "Untitled Recording",
           duration,
-          thumbnail, // may be null if still generating — that's fine
+          thumbnail, // captured from live stream — may be null
         }),
       });
 
@@ -142,7 +122,7 @@ export function UploadDialog({
         )}
       </div>
 
-      {/* Preview — preload="metadata" avoids loading entire video into memory */}
+      {/* Preview — preload="metadata" avoids loading entire file into memory */}
       <div className="rounded-lg overflow-hidden bg-black aspect-video">
         <video
           src={previewUrl}

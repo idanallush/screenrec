@@ -17,6 +17,7 @@ export function useScreenRecorder() {
   const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null);
   const [micStream, setMicStream] = useState<MediaStream | null>(null);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  const [recordedThumbnail, setRecordedThumbnail] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [mimeType, setMimeType] = useState("video/webm");
@@ -167,6 +168,44 @@ export function useScreenRecorder() {
     canvasStreamRef.current = stream;
   }, []);
 
+  /** Capture a thumbnail frame from the live screen stream — instant, no blob loading */
+  const captureThumbnail = useCallback(() => {
+    try {
+      const stream = canvasStreamRef.current || screenStream;
+      if (!stream) return null;
+
+      const videoTrack = stream.getVideoTracks()[0];
+      if (!videoTrack) return null;
+
+      const settings = videoTrack.getSettings();
+      const vw = settings.width || 1920;
+      const vh = settings.height || 1080;
+
+      const canvas = document.createElement("canvas");
+      const thumbWidth = 320;
+      const aspect = vw / vh;
+      canvas.width = thumbWidth;
+      canvas.height = Math.round(thumbWidth / aspect);
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+
+      // Try to find an active video element showing this stream
+      const videoEl = document.querySelector("video");
+      if (videoEl && videoEl.readyState >= 2) {
+        ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.6);
+        console.log("[Thumbnail] Captured from live stream");
+        return dataUrl;
+      }
+
+      return null;
+    } catch (err) {
+      console.warn("[Thumbnail] Failed to capture from stream:", err);
+      return null;
+    }
+  }, [screenStream]);
+
   const startRecording = useCallback(() => {
     if (!screenStream) return;
 
@@ -279,6 +318,10 @@ export function useScreenRecorder() {
   }, [startTimer]);
 
   const stopRecording = useCallback(() => {
+    // Capture thumbnail BEFORE stopping — the stream is still alive
+    const thumb = captureThumbnail();
+    setRecordedThumbnail(thumb);
+
     if (
       mediaRecorderRef.current &&
       mediaRecorderRef.current.state !== "inactive"
@@ -286,10 +329,11 @@ export function useScreenRecorder() {
       mediaRecorderRef.current.stop();
     }
     // Streams stay alive until user uploads or discards
-  }, []);
+  }, [captureThumbnail]);
 
   const discardRecording = useCallback(() => {
     setRecordedBlob(null);
+    setRecordedThumbnail(null);
     setDuration(0);
     cleanup();
     setState("IDLE");
@@ -307,6 +351,7 @@ export function useScreenRecorder() {
     webcamStream,
     micStream,
     recordedBlob,
+    recordedThumbnail,
     duration,
     error,
     mimeType,

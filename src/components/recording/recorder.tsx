@@ -30,6 +30,7 @@ export function Recorder() {
     webcamStream,
     micStream,
     recordedBlob,
+    recordedThumbnail,
     duration,
     error,
     startScreenCapture,
@@ -354,6 +355,7 @@ export function Recorder() {
       <div className="flex flex-col items-center justify-center py-8">
         <UploadDialog
           blob={recordedBlob}
+          thumbnail={recordedThumbnail}
           duration={duration}
           onComplete={handleComplete}
           onDiscard={discardRecording}
