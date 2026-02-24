@@ -20,21 +20,22 @@ export function useUpload() {
       setProgress(0);
 
       try {
-        // Upload directly to Vercel Blob from the browser
+        // Upload directly from browser to Vercel Blob
         const result = await vercelUpload(
           `recordings/${recordingId}.webm`,
           blob,
           {
             access: "public",
             handleUploadUrl: "/api/upload",
+            clientPayload: JSON.stringify({ recordingId }),
             onUploadProgress: (e) => {
               setProgress(e.percentage);
             },
           }
         );
 
-        // The onUploadCompleted callback on the server updates the DB,
-        // but it may not have fired yet. Update manually as well.
+        // Client-side DB update as fallback
+        // (onUploadCompleted webhook may not have fired yet)
         const res = await fetch(`/api/recordings/${recordingId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -45,6 +46,11 @@ export function useUpload() {
           }),
         });
 
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `PATCH failed: ${res.status}`);
+        }
+
         const recording = await res.json();
 
         setUploading(false);
@@ -52,7 +58,9 @@ export function useUpload() {
         options.onComplete?.(recording);
       } catch (err) {
         setUploading(false);
-        options.onError?.((err as Error).message);
+        const msg = err instanceof Error ? err.message : "Upload failed";
+        console.error("Upload error:", err);
+        options.onError?.(msg);
       }
     },
     []
