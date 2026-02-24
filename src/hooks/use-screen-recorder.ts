@@ -15,6 +15,7 @@ export function useScreenRecorder() {
   const [state, setState] = useState<RecorderState>("IDLE");
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null);
+  const [micStream, setMicStream] = useState<MediaStream | null>(null);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +27,7 @@ export function useScreenRecorder() {
   const startTimeRef = useRef<number>(0);
   const pausedDurationRef = useRef<number>(0);
   const canvasStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   const stopTimer = useCallback(() => {
     if (timerRef.current) {
@@ -52,13 +54,21 @@ export function useScreenRecorder() {
     if (webcamStream) {
       webcamStream.getTracks().forEach((t) => t.stop());
     }
+    if (micStream) {
+      micStream.getTracks().forEach((t) => t.stop());
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
     setScreenStream(null);
     setWebcamStream(null);
+    setMicStream(null);
     canvasStreamRef.current = null;
     mediaRecorderRef.current = null;
     chunksRef.current = [];
     pausedDurationRef.current = 0;
-  }, [screenStream, webcamStream, stopTimer]);
+  }, [screenStream, webcamStream, micStream, stopTimer]);
 
   const startScreenCapture = useCallback(async () => {
     try {
@@ -103,7 +113,7 @@ export function useScreenRecorder() {
           video: deviceId
             ? { deviceId: { exact: deviceId }, width: 320, height: 320 }
             : { width: 320, height: 320, facingMode: "user" },
-          audio: true,
+          audio: false, // Audio handled by separate microphone stream
         };
         const stream =
           await navigator.mediaDevices.getUserMedia(constraints);
@@ -125,6 +135,34 @@ export function useScreenRecorder() {
     }
   }, [webcamStream]);
 
+  const startMicrophone = useCallback(
+    async (deviceId?: string) => {
+      try {
+        const constraints: MediaStreamConstraints = {
+          audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+          video: false,
+        };
+        const stream =
+          await navigator.mediaDevices.getUserMedia(constraints);
+        setMicStream(stream);
+        console.log("[Mic] Microphone started, tracks:", stream.getAudioTracks().length);
+        return stream;
+      } catch (err) {
+        console.error("[Mic] Failed to start microphone:", err);
+        // Non-fatal: recording works without mic, just no narration audio
+        return null;
+      }
+    },
+    []
+  );
+
+  const stopMicrophone = useCallback(() => {
+    if (micStream) {
+      micStream.getTracks().forEach((t) => t.stop());
+      setMicStream(null);
+    }
+  }, [micStream]);
+
   const setCanvasStream = useCallback((stream: MediaStream) => {
     canvasStreamRef.current = stream;
   }, []);
@@ -139,16 +177,57 @@ export function useScreenRecorder() {
     // Determine which video stream to record
     const videoStream = canvasStreamRef.current || screenStream;
 
-    // Collect all audio tracks
-    const audioTracks = [
-      ...screenStream.getAudioTracks(),
-      ...(webcamStream?.getAudioTracks() ?? []),
-    ];
+    // Collect all audio tracks from screen capture and microphone
+    const screenAudioTracks = screenStream.getAudioTracks();
+    const micAudioTracks = micStream?.getAudioTracks() ?? [];
+    const allAudioTracks = [...screenAudioTracks, ...micAudioTracks];
+
+    console.log("[Recording] Audio sources:", {
+      screenAudio: screenAudioTracks.length,
+      micAudio: micAudioTracks.length,
+      total: allAudioTracks.length,
+    });
+
+    // Mix multiple audio sources using Web Audio API
+    let finalAudioTracks: MediaStreamTrack[] = [];
+
+    if (allAudioTracks.length > 1) {
+      // Multiple audio sources need mixing into a single track
+      try {
+        const audioCtx = new AudioContext();
+        audioContextRef.current = audioCtx;
+        const dest = audioCtx.createMediaStreamDestination();
+
+        for (const track of allAudioTracks) {
+          const source = audioCtx.createMediaStreamSource(
+            new MediaStream([track])
+          );
+          source.connect(dest);
+        }
+
+        finalAudioTracks = dest.stream.getAudioTracks();
+        console.log(
+          "[Recording] Mixed",
+          allAudioTracks.length,
+          "audio tracks into 1"
+        );
+      } catch (err) {
+        console.error("[Recording] Audio mixing failed, using tracks directly:", err);
+        finalAudioTracks = allAudioTracks;
+      }
+    } else {
+      finalAudioTracks = allAudioTracks;
+    }
 
     const combinedStream = new MediaStream([
       ...videoStream.getVideoTracks(),
-      ...audioTracks,
+      ...finalAudioTracks,
     ]);
+
+    console.log("[Recording] Combined stream:", {
+      videoTracks: combinedStream.getVideoTracks().length,
+      audioTracks: combinedStream.getAudioTracks().length,
+    });
 
     const recorder = new MediaRecorder(combinedStream, {
       mimeType: detectedMime,
@@ -164,6 +243,11 @@ export function useScreenRecorder() {
       setRecordedBlob(blob);
       stopTimer();
       setState("STOPPED");
+      // Close AudioContext when recording stops
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
     };
 
     recorder.start(1000);
@@ -172,7 +256,7 @@ export function useScreenRecorder() {
     setDuration(0);
     startTimer();
     setState("RECORDING");
-  }, [screenStream, webcamStream, startTimer, stopTimer]);
+  }, [screenStream, micStream, startTimer, stopTimer]);
 
   const pauseRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === "recording") {
@@ -218,6 +302,7 @@ export function useScreenRecorder() {
     state,
     screenStream,
     webcamStream,
+    micStream,
     recordedBlob,
     duration,
     error,
@@ -225,6 +310,8 @@ export function useScreenRecorder() {
     startScreenCapture,
     startWebcam,
     stopWebcam,
+    startMicrophone,
+    stopMicrophone,
     setCanvasStream,
     startRecording,
     pauseRecording,

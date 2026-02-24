@@ -8,13 +8,14 @@ import { RecordingTimer } from "./recording-timer";
 import { ScreenPreview } from "./screen-preview";
 import { WebcamPreview } from "./webcam-preview";
 import { WebcamPositionPicker } from "./webcam-position-picker";
-import { DeviceSelector } from "./device-selector";
 import { UploadDialog } from "./upload-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Monitor,
   Camera,
   CameraOff,
+  Mic,
+  MicOff,
   Video,
 } from "lucide-react";
 import type { WebcamPosition, Recording } from "@/lib/types";
@@ -27,12 +28,15 @@ export function Recorder() {
     state,
     screenStream,
     webcamStream,
+    micStream,
     recordedBlob,
     duration,
     error,
     startScreenCapture,
     startWebcam,
     stopWebcam,
+    startMicrophone,
+    stopMicrophone,
     setCanvasStream,
     startRecording,
     pauseRecording,
@@ -43,6 +47,7 @@ export function Recorder() {
   } = useScreenRecorder();
 
   const { cameras, microphones } = useMediaDevices();
+  const [includeMic, setIncludeMic] = useState(true);
   const [includeWebcam, setIncludeWebcam] = useState(false);
   const [webcamPosition, setWebcamPosition] =
     useState<WebcamPosition>("bottom-right");
@@ -168,10 +173,16 @@ export function Recorder() {
 
   const handleStartCapture = useCallback(async () => {
     const stream = await startScreenCapture();
-    if (stream && includeWebcam) {
-      await startWebcam(selectedCamera || undefined);
+    if (stream) {
+      // Always capture microphone for narration audio
+      if (includeMic) {
+        await startMicrophone(selectedMic || undefined);
+      }
+      if (includeWebcam) {
+        await startWebcam(selectedCamera || undefined);
+      }
     }
-  }, [startScreenCapture, startWebcam, includeWebcam, selectedCamera]);
+  }, [startScreenCapture, startWebcam, startMicrophone, includeWebcam, includeMic, selectedCamera, selectedMic]);
 
   const handleStartRecording = useCallback(() => {
     setCountdown(3);
@@ -187,6 +198,18 @@ export function Recorder() {
       }
     }, 1000);
   }, [startRecording]);
+
+  const toggleMic = useCallback(async () => {
+    if (includeMic) {
+      stopMicrophone();
+      setIncludeMic(false);
+    } else {
+      setIncludeMic(true);
+      if (state === "PREVIEWING") {
+        await startMicrophone(selectedMic || undefined);
+      }
+    }
+  }, [includeMic, stopMicrophone, state, startMicrophone, selectedMic]);
 
   const toggleWebcam = useCallback(async () => {
     if (includeWebcam) {
@@ -221,9 +244,50 @@ export function Recorder() {
         </div>
 
         <div className="w-full max-w-sm space-y-4">
+          {/* Microphone toggle */}
+          <div className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border">
+            <span className="text-sm font-medium flex items-center gap-2">
+              <Mic className="w-4 h-4" /> Microphone
+            </span>
+            <button
+              onClick={() => setIncludeMic(!includeMic)}
+              className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
+                includeMic ? "bg-primary" : "bg-border"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                  includeMic ? "translate-x-5" : ""
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Mic device selector */}
+          {includeMic && microphones.length > 0 && (
+            <div className="p-3 bg-surface rounded-lg border border-border">
+              <div className="flex items-center gap-2">
+                <Mic className="w-4 h-4 text-muted" />
+                <select
+                  value={selectedMic || ""}
+                  onChange={(e) => setSelectedMic(e.target.value)}
+                  className="flex-1 px-2 py-1.5 rounded-lg bg-surface border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  {microphones.map((mic) => (
+                    <option key={mic.deviceId} value={mic.deviceId}>
+                      {mic.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
           {/* Webcam toggle */}
           <div className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border">
-            <span className="text-sm font-medium">Include Webcam</span>
+            <span className="text-sm font-medium flex items-center gap-2">
+              <Camera className="w-4 h-4" /> Webcam
+            </span>
             <button
               onClick={() => setIncludeWebcam(!includeWebcam)}
               className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
@@ -238,17 +302,25 @@ export function Recorder() {
             </button>
           </div>
 
-          {/* Device selector */}
+          {/* Webcam device selector */}
           {includeWebcam && (
             <div className="p-3 bg-surface rounded-lg border border-border">
-              <DeviceSelector
-                cameras={cameras}
-                microphones={microphones}
-                selectedCamera={selectedCamera}
-                selectedMic={selectedMic}
-                onCameraChange={setSelectedCamera}
-                onMicChange={setSelectedMic}
-              />
+              {cameras.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Camera className="w-4 h-4 text-muted" />
+                  <select
+                    value={selectedCamera || ""}
+                    onChange={(e) => setSelectedCamera(e.target.value)}
+                    className="flex-1 px-2 py-1.5 rounded-lg bg-surface border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    {cameras.map((cam) => (
+                      <option key={cam.deviceId} value={cam.deviceId}>
+                        {cam.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="mt-3 flex items-center gap-2">
                 <span className="text-xs text-muted">Position:</span>
                 <WebcamPositionPicker
@@ -345,18 +417,32 @@ export function Recorder() {
         />
 
         {state === "PREVIEWING" && (
-          <Button
-            variant={includeWebcam ? "secondary" : "outline"}
-            size="icon"
-            onClick={toggleWebcam}
-            title={includeWebcam ? "Disable webcam" : "Enable webcam"}
-          >
-            {includeWebcam ? (
-              <Camera className="w-5 h-5" />
-            ) : (
-              <CameraOff className="w-5 h-5" />
-            )}
-          </Button>
+          <>
+            <Button
+              variant={includeMic ? "secondary" : "outline"}
+              size="icon"
+              onClick={toggleMic}
+              title={includeMic ? "Mute microphone" : "Unmute microphone"}
+            >
+              {includeMic ? (
+                <Mic className="w-5 h-5" />
+              ) : (
+                <MicOff className="w-5 h-5" />
+              )}
+            </Button>
+            <Button
+              variant={includeWebcam ? "secondary" : "outline"}
+              size="icon"
+              onClick={toggleWebcam}
+              title={includeWebcam ? "Disable webcam" : "Enable webcam"}
+            >
+              {includeWebcam ? (
+                <Camera className="w-5 h-5" />
+              ) : (
+                <CameraOff className="w-5 h-5" />
+              )}
+            </Button>
+          </>
         )}
       </div>
     </div>
