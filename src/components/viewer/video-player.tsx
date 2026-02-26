@@ -13,9 +13,10 @@ import { formatDuration } from "@/lib/utils";
 
 interface VideoPlayerProps {
   src: string;
+  fallbackDuration?: number;
 }
 
-export function VideoPlayer({ src }: VideoPlayerProps) {
+export function VideoPlayer({ src, fallbackDuration }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -81,19 +82,55 @@ export function VideoPlayer({ src }: VideoPlayerProps) {
     setPlaybackRate(next);
   }, [playbackRate]);
 
+  // WebM duration discovery: seek to a huge value to force the browser
+  // to compute the real duration, then seek back to 0
+  const discoveringDuration = useRef(false);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
-    const onTimeUpdate = () => setCurrentTime(video.currentTime);
+    const onTimeUpdate = () => {
+      // Suppress time updates during duration discovery to avoid visual glitches
+      if (!discoveringDuration.current) {
+        setCurrentTime(video.currentTime);
+      }
+    };
+
+    const trySetDuration = () => {
+      if (Number.isFinite(video.duration) && video.duration > 0) {
+        setDuration(video.duration);
+        return true;
+      }
+      return false;
+    };
+
     const onLoadedMetadata = () => {
-      if (Number.isFinite(video.duration)) setDuration(video.duration);
+      if (trySetDuration()) return;
+
+      // WebM from MediaRecorder: duration is Infinity — use the seek trick
+      if (!discoveringDuration.current) {
+        discoveringDuration.current = true;
+        // Seek to a very large value to force the browser to discover the real duration
+        video.currentTime = 1e10;
+      }
     };
+
     const onDurationChange = () => {
-      if (Number.isFinite(video.duration)) setDuration(video.duration);
+      trySetDuration();
     };
+
+    // After the seek-to-end trick, the browser fires seeked with the real duration
+    const onSeeked = () => {
+      if (discoveringDuration.current && trySetDuration()) {
+        // Duration discovered — seek back to the start
+        video.currentTime = 0;
+        discoveringDuration.current = false;
+      }
+    };
+
     const onFullscreenChange = () =>
       setIsFullscreen(!!document.fullscreenElement);
 
@@ -102,6 +139,7 @@ export function VideoPlayer({ src }: VideoPlayerProps) {
     video.addEventListener("timeupdate", onTimeUpdate);
     video.addEventListener("loadedmetadata", onLoadedMetadata);
     video.addEventListener("durationchange", onDurationChange);
+    video.addEventListener("seeked", onSeeked);
     document.addEventListener("fullscreenchange", onFullscreenChange);
 
     return () => {
@@ -110,6 +148,7 @@ export function VideoPlayer({ src }: VideoPlayerProps) {
       video.removeEventListener("timeupdate", onTimeUpdate);
       video.removeEventListener("loadedmetadata", onLoadedMetadata);
       video.removeEventListener("durationchange", onDurationChange);
+      video.removeEventListener("seeked", onSeeked);
       document.removeEventListener("fullscreenchange", onFullscreenChange);
     };
   }, []);
@@ -150,8 +189,8 @@ export function VideoPlayer({ src }: VideoPlayerProps) {
     }
   }, [playing]);
 
-  // WebM from MediaRecorder often has Infinity/NaN duration
-  const validDuration = Number.isFinite(duration) ? duration : 0;
+  // Use browser-detected duration, fall back to DB duration from recording
+  const validDuration = duration > 0 ? duration : (fallbackDuration || 0);
   const progress = validDuration > 0 ? (currentTime / validDuration) * 100 : 0;
 
   return (

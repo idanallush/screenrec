@@ -37,7 +37,7 @@ export default async function WatchPage({ params }: Props) {
 
       {/* Player */}
       <main className="max-w-5xl mx-auto p-4 md:p-8">
-        <VideoPlayer src={videoUrl} />
+        <VideoPlayer src={videoUrl} fallbackDuration={recording.duration} />
         <VideoInfo recording={recording} />
         <ShareButton recordingId={recording.id} />
       </main>
